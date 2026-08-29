@@ -1,0 +1,18 @@
+{
+  "services": {
+    "threadly": {
+      "root": ".",
+      "framework": "nextjs",
+      "buildCommand": "npx convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'next build'"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "threadly"
+      }
+    }
+  ]
+}

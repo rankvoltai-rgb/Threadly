@@ -8,10 +8,14 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
 import type * as cache from "../cache.js";
 import type * as constants from "../constants.js";
 import type * as entitlements from "../entitlements.js";
+import type * as http from "../http.js";
+import type * as icp from "../icp.js";
 import type * as savedLeads from "../savedLeads.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -20,10 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   cache: typeof cache;
   constants: typeof constants;
   entitlements: typeof entitlements;
+  http: typeof http;
+  icp: typeof icp;
   savedLeads: typeof savedLeads;
+  users: typeof users;
 }>;
 
 /**

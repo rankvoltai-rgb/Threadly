@@ -178,3 +178,71 @@ ${JSON.stringify(payload)}`,
   }
   return map.size ? map : null;
 }
+
+export type IcpProfile = {
+  business: string;
+  sells: string;
+  idealCustomer: string;
+  keywords: string[];
+};
+
+/**
+ * Reads a prospect's own site and works out who their buyers are, then writes
+ * the Threads queries that find those buyers. Same recall rules as
+ * expandKeywords — short and literal beats descriptive.
+ */
+export async function analyseIcp(siteText: string, url: string): Promise<IcpProfile | null> {
+  const out = await generateJson<IcpProfile>(
+    `You analyse a business's website to find them customers on Meta Threads.
+
+WEBSITE: ${url}
+
+PAGE CONTENT:
+"""
+${siteText.slice(0, 5000)}
+"""
+
+Work out:
+- business: the company or personal brand name. 2-4 words.
+- sells: the single main service or product they sell, in plain words. 2-6 words.
+- idealCustomer: who buys this, concretely. One sentence, max 20 words.
+  Name the kind of person or business, not a market segment.
+  Good: "Small local service businesses that need a website but have no in-house designer."
+  Bad: "SMBs seeking digital transformation solutions."
+- keywords: 6 Threads search queries that find people asking to buy this.
+
+Keyword rules (these matter most):
+- 3 to 5 words each. Shorter finds far more posts.
+- NO adjectives (good, affordable, professional) and NO time words (now, asap).
+- Use the plainest noun for what they want: "web designer", "bookkeeper", "video editor".
+- Phrase as someone SEEKING it, never offering it.
+- Vary the opening verb: "looking for", "need", "anyone know", "hiring".
+- No hashtags, quotes or punctuation.
+
+Example for a web design studio:
+looking for a web designer / need a website built / anyone know a web designer /
+hiring a web designer / need someone to redesign my site / looking for a logo designer`,
+    {
+      responseSchema: {
+        type: "object",
+        properties: {
+          business: { type: "string" },
+          sells: { type: "string" },
+          idealCustomer: { type: "string" },
+          keywords: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 6 },
+        },
+        required: ["business", "sells", "idealCustomer", "keywords"],
+      },
+      temperature: 0.2,
+      timeoutMs: 45_000,
+    }
+  );
+
+  if (!out?.keywords?.length) return null;
+  return {
+    business: String(out.business || "").slice(0, 80),
+    sells: String(out.sells || "").slice(0, 80),
+    idealCustomer: String(out.idealCustomer || "").slice(0, 240),
+    keywords: out.keywords.map((k) => String(k).trim()).filter(Boolean).slice(0, 6),
+  };
+}

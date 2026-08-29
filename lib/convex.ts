@@ -95,6 +95,23 @@ export const fns = {
     "savedLeads:list"
   ),
 
+  icpGet: makeFunctionReference<"query", { visitorId: string }, IcpRow | null>("icp:get"),
+
+  icpGetByUrl: makeFunctionReference<"query", { url: string }, IcpRow | null>("icp:getByUrl"),
+
+  icpSave: makeFunctionReference<
+    "mutation",
+    {
+      visitorId: string;
+      url: string;
+      business: string;
+      sells: string;
+      idealCustomer: string;
+      keywords: string[];
+    },
+    { id: string; updated: boolean }
+  >("icp:save"),
+
   savedSave: makeFunctionReference<
     "mutation",
     {
@@ -128,6 +145,16 @@ export const fns = {
     { visitorId: string; postId: string },
     { removed: boolean }
   >("savedLeads:remove"),
+};
+
+export type IcpRow = {
+  _id: string;
+  url: string;
+  business: string;
+  sells: string;
+  idealCustomer: string;
+  keywords: string[];
+  analysedAt: number;
 };
 
 export function cacheKeyFor(keywords: string[], daysBack: number) {

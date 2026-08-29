@@ -1,7 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  // users, authAccounts, authSessions, … — owned by Convex Auth.
+  ...authTables,
+
   /**
    * A purchase. `visitorId` is the browser that bought it; `email` comes from
    * Stripe and is what makes a purchase recoverable after a cookie clear.
@@ -54,6 +58,19 @@ export default defineSchema({
     score: v.number(),
     signals: v.array(v.string()),
   }).index("by_search", ["searchId"]),
+
+  /** A prospect's own site, analysed once into an ICP and cached. */
+  icpProfiles: defineTable({
+    visitorId: v.string(),
+    url: v.string(),
+    business: v.string(),
+    sells: v.string(),
+    idealCustomer: v.string(),
+    keywords: v.array(v.string()),
+    analysedAt: v.number(),
+  })
+    .index("by_visitor", ["visitorId"])
+    .index("by_url", ["url"]),
 
   /** A lead the user is working, with pipeline state. */
   savedLeads: defineTable({

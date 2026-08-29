@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ensureVisitorId, readVisitorId } from "@/lib/entitlement";
+import { ensureVisitorId } from "@/lib/entitlement";
+import { resolveIdentity } from "@/lib/identity";
 import { getConvex, fns, type SavedStatus } from "@/lib/convex";
 
 const STATUSES: SavedStatus[] = ["new", "contacted", "replied", "won", "dead"];
@@ -15,7 +16,7 @@ export async function GET() {
   const convex = getConvex();
   if (!convex) return NextResponse.json({ leads: [], available: false });
 
-  const visitorId = await readVisitorId();
+  const { key: visitorId } = await resolveIdentity();
   if (!visitorId) return NextResponse.json({ leads: [], available: true });
 
   try {
@@ -39,7 +40,9 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true });
-  const visitorId = await ensureVisitorId(res);
+  const identity = await resolveIdentity();
+  // Signed-in users key off the account; anonymous ones mint a visitor cookie.
+  const visitorId = identity.authed ? identity.key : await ensureVisitorId(res);
   const postId = String(body.postId || "");
   if (!postId) return NextResponse.json({ error: "postId is required." }, { status: 400 });
 

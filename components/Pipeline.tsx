@@ -43,9 +43,20 @@ export default function Pipeline({
   onBack: () => void;
 }) {
   const [filter, setFilter] = useState<SavedStatus | "all">("all");
+  const [q, setQ] = useState("");
   // Read the clock once per mount so row ages stay stable across re-renders.
   const [now] = useState(() => Date.now());
-  const shown = filter === "all" ? leads : leads.filter((l) => l.status === filter);
+  const needle = q.trim().toLowerCase();
+  const shown = leads
+    .filter((l) => (filter === "all" ? true : l.status === filter))
+    .filter((l) =>
+      !needle
+        ? true
+        : l.username.toLowerCase().includes(needle) ||
+          (l.fullName ?? "").toLowerCase().includes(needle) ||
+          l.text.toLowerCase().includes(needle) ||
+          (l.notes ?? "").toLowerCase().includes(needle)
+    );
 
   const counts = STATUSES.map((s) => ({
     ...s,
@@ -74,6 +85,17 @@ export default function Pipeline({
 
   return (
     <>
+      <div className="mb-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search saved leads — handle, post text or notes…"
+          aria-label="Search saved leads"
+          className="focus-ring w-full rounded-lg border px-3 py-2 text-[13.5px] outline-none placeholder:text-subtle"
+          style={{ borderColor: "var(--border)", background: "var(--surface-muted)" }}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
           onClick={() => setFilter("all")}
@@ -101,6 +123,15 @@ export default function Pipeline({
           </button>
         ))}
       </div>
+
+      {shown.length === 0 && (
+        <div className="card p-8 text-center">
+          <p className="text-[14.5px] font-medium">No leads match</p>
+          <p className="mt-1.5 text-[13.5px] text-muted">
+            {needle ? `Nothing for "${q.trim()}".` : "Nothing in this stage yet."}
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {shown.map((lead) => (

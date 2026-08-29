@@ -5,6 +5,7 @@ import { Logo, Spinner, Arrow, Check, Lock, Bookmark } from "./Icons";
 import { LeadCard, LockedCard, type UnlockedLead, type LockedLead } from "./LeadCard";
 import Pipeline, { type SavedLead, type SavedStatus } from "./Pipeline";
 import ThreadsRain from "./ThreadsRain";
+import AccountMenu from "./AccountMenu";
 import RotatingWord from "./RotatingWord";
 
 type SearchResult = {
@@ -24,6 +25,14 @@ const EXAMPLES = [
   "need help with SEO",
 ];
 
+export type Icp = {
+  url: string;
+  business: string;
+  sells: string;
+  idealCustomer: string;
+  keywords: string[];
+};
+
 const RANGES = [
   { label: "7 days", value: 7 },
   { label: "30 days", value: 30 },
@@ -37,6 +46,9 @@ export default function Dashboard({
   checkoutStatus,
   convexEnabled,
   initialSaved,
+  initialIcp,
+  account = null,
+  startView = "search",
 }: {
   initialLicensed: boolean;
   initialTrialRemaining: number;
@@ -44,6 +56,9 @@ export default function Dashboard({
   checkoutStatus?: string;
   convexEnabled: boolean;
   initialSaved: SavedLead[];
+  initialIcp: Icp | null;
+  account?: { email: string | null } | null;
+  startView?: "search" | "pipeline";
 }) {
   const [keywords, setKeywords] = useState("");
   const [daysBack, setDaysBack] = useState(30);
@@ -64,7 +79,13 @@ export default function Dashboard({
           : null
   );
 
-  const [view, setView] = useState<"search" | "pipeline">("search");
+  const [mode, setMode] = useState<"keywords" | "site">("keywords");
+  const [siteUrl, setSiteUrl] = useState("");
+  const [icp, setIcp] = useState<Icp | null>(initialIcp);
+  const [icpLoading, setIcpLoading] = useState(false);
+  const [icpError, setIcpError] = useState<string | null>(null);
+
+  const [view, setView] = useState<"search" | "pipeline">(startView);
   const [saved, setSaved] = useState<SavedLead[]>(initialSaved);
   const [restoreOpen, setRestoreOpen] = useState(false);
 
@@ -142,6 +163,28 @@ export default function Dashboard({
     [savedIds, mutateSaved]
   );
 
+  const analyseSite = useCallback(async () => {
+    const u = siteUrl.trim();
+    if (!u || icpLoading) return;
+    setIcpLoading(true);
+    setIcpError(null);
+    try {
+      const res = await fetch("/api/icp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: u }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't analyse that site.");
+      setIcp(data);
+      setMode("keywords");
+    } catch (err) {
+      setIcpError(err instanceof Error ? err.message : "Couldn't analyse that site.");
+    } finally {
+      setIcpLoading(false);
+    }
+  }, [siteUrl, icpLoading]);
+
   const runSearch = useCallback(
     async (query?: string) => {
       const q = (query ?? keywords).trim();
@@ -206,6 +249,7 @@ export default function Dashboard({
           <Logo className="size-7" />
           <span className="text-[15px] font-semibold tracking-tight">Threadly</span>
           <div className="ml-auto flex items-center gap-3">
+            <AccountMenu email={account?.email ?? null} convexEnabled={convexEnabled} />
             {convexEnabled && (
               <button
                 onClick={() => setView(view === "pipeline" ? "search" : "pipeline")}
@@ -300,25 +344,65 @@ export default function Dashboard({
 
             <div className={`mx-auto ${hasSearched ? "" : "mt-7"} max-w-2xl`}>
               <div className="card p-2 shadow-[0_18px_50px_-18px_rgba(0,0,0,.9)]">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && runSearch()}
-                    placeholder="looking for a web designer, need a copywriter…"
-                    aria-label="Keywords to search on Threads"
-                    className="focus-ring min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-subtle"
-                  />
-                  <button
-                    onClick={() => runSearch()}
-                    disabled={loading || !keywords.trim()}
-                    className="focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[14px] font-semibold text-white transition-colors disabled:opacity-50"
-                    style={{ background: "var(--accent)" }}
-                  >
-                    {loading ? <Spinner className="size-4" /> : null}
-                    {loading ? "Searching…" : "Find leads"}
-                  </button>
+                <div className="flex items-center gap-1 px-1 pb-1.5">
+                  {(["keywords", "site"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMode(m)}
+                      className="focus-ring rounded-md px-2 py-1 text-[12px] font-medium transition-colors"
+                      style={
+                        mode === m
+                          ? { background: "var(--accent-soft)", color: "var(--accent)" }
+                          : { color: "var(--subtle)" }
+                      }
+                    >
+                      {m === "keywords" ? "Keywords" : "From my website"}
+                    </button>
+                  ))}
                 </div>
+
+                {mode === "keywords" ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      value={keywords}
+                      onChange={(e) => setKeywords(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && runSearch()}
+                      placeholder="looking for a web designer, need a copywriter…"
+                      aria-label="Keywords to search on Threads"
+                      className="focus-ring min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-subtle"
+                    />
+                    <button
+                      onClick={() => runSearch()}
+                      disabled={loading || !keywords.trim()}
+                      className="focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[14px] font-semibold text-white transition-colors disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {loading ? <Spinner className="size-4" /> : null}
+                      {loading ? "Searching…" : "Find leads"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      value={siteUrl}
+                      onChange={(e) => setSiteUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && analyseSite()}
+                      placeholder="yourbusiness.com"
+                      aria-label="Your website address"
+                      inputMode="url"
+                      className="focus-ring min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-subtle"
+                    />
+                    <button
+                      onClick={analyseSite}
+                      disabled={icpLoading || !siteUrl.trim()}
+                      className="focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[14px] font-semibold text-white transition-colors disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {icpLoading ? <Spinner className="size-4" /> : null}
+                      {icpLoading ? "Reading site…" : "Find my keywords"}
+                    </button>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 border-t px-2 pt-2 mt-1"
                   style={{ borderColor: "var(--border)" }}>
                   <span className="text-[12px] text-subtle">Posted within</span>
@@ -337,12 +421,43 @@ export default function Dashboard({
                     </button>
                   ))}
                   <span className="ml-auto text-[12px] text-subtle">
-                    Separate keywords with commas
+                    {mode === "keywords"
+                      ? "Separate keywords with commas"
+                      : "We read your site and suggest keywords"}
                   </span>
                 </div>
               </div>
 
-              {!hasSearched && (
+              {icpError && (
+                <p className="mt-3 text-[13px] text-white">{icpError}</p>
+              )}
+
+              {!hasSearched && icp && (
+                <div className="mt-4">
+                  <p className="text-[12.5px] text-subtle">
+                    <span className="text-muted">{icp.business}</span> — {icp.sells}.
+                    Buyers: {icp.idealCustomer}
+                  </p>
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
+                    {icp.keywords.map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => runSearch(k)}
+                        className="focus-ring rounded-full border px-3 py-1.5 text-[12.5px] transition-colors hover:text-foreground"
+                        style={{
+                          borderColor: "color-mix(in oklab, var(--accent) 45%, transparent)",
+                          background: "var(--accent-soft)",
+                          color: "var(--foreground)",
+                        }}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!hasSearched && !icp && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {EXAMPLES.map((ex, i) => (
                     <button

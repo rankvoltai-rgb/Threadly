@@ -19,6 +19,16 @@ export async function readVisitorId(): Promise<string | null> {
 }
 
 /**
+ * Signed-in users key off their account so trials and licences follow them
+ * across browsers; anonymous visitors fall back to the cookie.
+ */
+export async function readIdentityKey(): Promise<string | null> {
+  const { resolveIdentity } = await import("./identity");
+  const identity = await resolveIdentity();
+  return identity.key || null;
+}
+
+/**
  * Server components cannot set cookies, so a visitor id is minted by the first
  * route handler the browser touches and attached to that response.
  */

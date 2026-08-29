@@ -6,6 +6,7 @@ import { LeadCard, LockedCard, type UnlockedLead, type LockedLead } from "./Lead
 import Pipeline, { type SavedLead, type SavedStatus } from "./Pipeline";
 import ThreadsRain from "./ThreadsRain";
 import AccountMenu from "./AccountMenu";
+import SocialProof, { type Purchase, type Activity } from "./SocialProof";
 import RotatingWord from "./RotatingWord";
 
 type SearchResult = {
@@ -49,6 +50,8 @@ export default function Dashboard({
   initialIcp,
   account = null,
   startView = "search",
+  purchases = [],
+  activity = null,
 }: {
   initialLicensed: boolean;
   initialTrialRemaining: number;
@@ -59,6 +62,8 @@ export default function Dashboard({
   initialIcp: Icp | null;
   account?: { email: string | null } | null;
   startView?: "search" | "pipeline";
+  purchases?: Purchase[];
+  activity?: Activity | null;
 }) {
   const [keywords, setKeywords] = useState("");
   const [daysBack, setDaysBack] = useState(30);
@@ -293,6 +298,8 @@ export default function Dashboard({
         </div>
       </header>
 
+      <SocialProof purchases={purchases} activity={activity} />
+
       {banner && (
         <div className="border-b px-5 py-2.5 text-center text-[13px]"
           style={{ borderColor: "var(--border)", background: "var(--accent-soft)", color: "var(--accent)" }}>
@@ -309,7 +316,7 @@ export default function Dashboard({
           className={`relative hero-glow px-5 ${
             hasSearched
               ? "pt-10 pb-6"
-              : "flex min-h-[calc(100svh-3.5rem)] items-center justify-center py-6"
+              : "flex min-h-[calc(100svh-5.625rem)] items-center justify-center py-6"
           }`}
         >
           {!hasSearched && <ThreadsRain />}

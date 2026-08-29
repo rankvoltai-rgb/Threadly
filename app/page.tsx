@@ -40,10 +40,13 @@ async function loadIcp(visitorId: string | null): Promise<Icp | null> {
 
 export default async function Page({ searchParams }: PageProps<"/">) {
   const visitorId = await readVisitorId();
-  const [ent, initialSaved, initialIcp, params] = await Promise.all([
+  const convex = getConvex();
+  const [ent, initialSaved, initialIcp, purchases, activity, params] = await Promise.all([
     resolveEntitlement(visitorId),
     loadSaved(visitorId),
     loadIcp(visitorId),
+    convex ? convex.query(fns.recentPurchases, { limit: 30 }).catch(() => []) : Promise.resolve([]),
+    convex ? convex.query(fns.activity, {}).catch(() => null) : Promise.resolve(null),
     searchParams,
   ]);
   const checkout = typeof params.checkout === "string" ? params.checkout : undefined;
@@ -57,6 +60,8 @@ export default async function Page({ searchParams }: PageProps<"/">) {
       convexEnabled={convexEnabled()}
       initialSaved={initialSaved}
       initialIcp={initialIcp}
+      purchases={purchases}
+      activity={activity}
     />
   );
 }

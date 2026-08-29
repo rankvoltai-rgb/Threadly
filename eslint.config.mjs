@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Convex owns these — regenerated on every `convex dev`.
     "**/convex/_generated/**",
+    // The nested deploy copy is its own project and lints itself.
+    "Threadly/**",
   ]),
 ]);
 

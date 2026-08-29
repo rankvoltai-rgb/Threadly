@@ -1,17 +1,18 @@
 /**
- * Gemini helpers. Both functions fail soft and return null — the caller keeps
- * its existing behaviour (raw keywords, regex scoring) if the API is missing,
- * slow, or returns something unexpected. Gemini improves Threadly; it is never
- * allowed to break a search.
+ * LLM helpers with a two-provider chain: Gemini first, Groq as fallback.
+ * Everything fails soft and returns null — the caller keeps its existing
+ * behaviour (raw keywords, regex scoring) if both providers are unavailable.
+ * These features improve Threadly; they are never allowed to break a search.
  */
 
-// gemini-2.5-flash 404s for new API keys; 3.x is the current line. Gemini 3
-// models also reject thinkingConfig, so thinking is left at its default.
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
 export function geminiEnabled() {
-  return Boolean(process.env.GEMINI_API_KEY);
+  return Boolean(process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY);
 }
 
 type GenConfig = {
@@ -20,7 +21,7 @@ type GenConfig = {
   timeoutMs?: number;
 };
 
-async function generateJson<T>(prompt: string, cfg: GenConfig): Promise<T | null> {
+async function callGemini<T>(prompt: string, cfg: GenConfig): Promise<T | null> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
 
@@ -59,6 +60,62 @@ async function generateJson<T>(prompt: string, cfg: GenConfig): Promise<T | null
  * The Threads actor is very literal: "design services" returns nothing while
  * "looking for a web designer" returns a full page.
  */
+/**
+ * Groq speaks the OpenAI chat API and has no native responseSchema, so the
+ * shape is described in the prompt and json_object mode keeps it parseable.
+ */
+async function callGroq<T>(prompt: string, cfg: GenConfig): Promise<T | null> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return null;
+
+  try {
+    const res = await fetch(GROQ_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        temperature: cfg.temperature ?? 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You output only JSON. It must match this JSON Schema exactly, with no extra keys and no prose:\n" +
+              JSON.stringify(cfg.responseSchema),
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(cfg.timeoutMs ?? 30_000),
+    });
+
+    if (!res.ok) {
+      console.error("[threadly] groq HTTP", res.status, (await res.text()).slice(0, 200));
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (typeof text !== "string") return null;
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.error("[threadly] groq call failed:", err);
+    return null;
+  }
+}
+
+/** Gemini first; Groq picks up whenever Gemini is missing, erroring or slow. */
+async function generateJson<T>(prompt: string, cfg: GenConfig): Promise<T | null> {
+  const viaGemini = await callGemini<T>(prompt, cfg);
+  if (viaGemini !== null) return viaGemini;
+
+  if (process.env.GROQ_API_KEY) {
+    console.warn("[threadly] gemini unavailable, falling back to groq");
+    return await callGroq<T>(prompt, cfg);
+  }
+  return null;
+}
+
 export async function expandKeywords(raw: string): Promise<string[] | null> {
   const out = await generateJson<{ queries: string[] }>(
     `You generate search queries for Meta Threads to find people who want to HIRE or BUY.

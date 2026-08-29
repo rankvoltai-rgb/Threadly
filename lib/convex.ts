@@ -95,6 +95,18 @@ export const fns = {
     "savedLeads:list"
   ),
 
+  recentPurchases: makeFunctionReference<
+    "query",
+    { limit?: number },
+    { email: string; amountCents: number; createdAt: number }[]
+  >("social:recentPurchases"),
+
+  activity: makeFunctionReference<
+    "query",
+    Record<string, never>,
+    { leadsFound: number; searchesRun: number; leadsSaved: number; lastSearchAt: number | null }
+  >("social:activity"),
+
   icpGet: makeFunctionReference<"query", { visitorId: string }, IcpRow | null>("icp:get"),
 
   icpGetByUrl: makeFunctionReference<"query", { url: string }, IcpRow | null>("icp:getByUrl"),

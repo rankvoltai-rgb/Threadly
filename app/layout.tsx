@@ -12,10 +12,31 @@ const poppins = Poppins({
 });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const SITE = "https://getthreadly.vercel.app";
+const TITLE = "Threadly — Turn IG Thread into Revenue";
+const DESCRIPTION =
+  "Find people on Threads asking for what you sell, ranked newest first. Paste your website and Threadly works out the keywords. 10 free leads, no signup — then $20 once, yours for life.";
+
 export const metadata: Metadata = {
-  title: "Threadly — Find buyers on Threads before anyone else",
-  description:
-    "Search Threads by keyword and get the freshest posts from people actively asking for what you sell. 10 free leads, then $20 for life.",
+  // Makes the opengraph-image / twitter-image files resolve to absolute URLs,
+  // which every social scraper requires.
+  metadataBase: new URL(SITE),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: "Threadly",
+  openGraph: {
+    type: "website",
+    url: SITE,
+    siteName: "Threadly",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
 };
 
 /** Forced black: browser chrome and form controls follow the page. */

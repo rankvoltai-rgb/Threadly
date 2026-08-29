@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { searchLeads, type Lead } from "@/lib/threads";
+import { searchLeads, rankLeads, type Lead } from "@/lib/threads";
+import { expandKeywords, scoreIntent, geminiEnabled } from "@/lib/gemini";
 import { ensureVisitorId, resolveEntitlement, recordTrialUse } from "@/lib/entitlement";
 import { getConvex, fns, cacheKeyFor, type LeadRow } from "@/lib/convex";
 
@@ -97,13 +98,32 @@ export async function POST(req: Request) {
     }
   }
 
+  let expandedFrom: string[] | null = null;
+  let queriesUsed: string[] = keywords;
+  let sellersDropped = 0;
+
   if (!leads) {
+    // Gemini rewrites the input into the phrasings buyers actually post. The
+    // actor is literal: "design services" returns nothing, "looking for a web
+    // designer" returns a page. Falls back to the raw keywords if unavailable.
+    let queries = keywords;
+    if (geminiEnabled()) {
+      const expanded = await expandKeywords(keywords.join(", "));
+      if (expanded?.length) {
+        queries = expanded;
+        queriesUsed = expanded;
+        expandedFrom = keywords;
+        console.log("[threadly] expanded", JSON.stringify(keywords), "->", JSON.stringify(expanded));
+      }
+    }
+
+    // Expansion multiplies the scrape: the actor fetches maxPosts *per query*.
+    // Split one budget across the queries so 3 of them cost about what 1 did.
+    const budget = ent.licensed ? Math.min(body.maxPosts ?? 50, 200) : 25;
+    const perQuery = Math.max(8, Math.ceil(budget / queries.length));
+
     try {
-      leads = await searchLeads({
-        queries: keywords,
-        daysBack,
-        maxPosts: ent.licensed ? Math.min(body.maxPosts ?? 50, 200) : 25,
-      });
+      leads = await searchLeads({ queries, daysBack, maxPosts: perQuery });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Search failed.";
       const timedOut = /timeout|aborted/i.test(message);
@@ -115,6 +135,32 @@ export async function POST(req: Request) {
         },
         { status: timedOut ? 504 : 502 }
       );
+    }
+
+    // Replace the regex scores with Gemini's read of real buying intent, and
+    // drop sellers advertising their own services — the regex cannot tell those
+    // apart from buyers, since an advert matches every intent phrase.
+    if (geminiEnabled() && leads.length) {
+      const verdicts = await scoreIntent(
+        leads.map((l) => ({ postId: l.postId, username: l.username, text: l.text }))
+      );
+      if (verdicts) {
+        const before = leads.length;
+        leads = rankLeads(
+          leads
+            .filter((l) => !verdicts.get(l.postId)?.isSeller)
+            .map((l) => {
+              const v = verdicts.get(l.postId);
+              if (!v) return l;
+              return {
+                ...l,
+                score: v.score,
+                signals: v.signals.length ? v.signals : l.signals,
+              };
+            })
+        );
+        sellersDropped = before - leads.length;
+      }
     }
 
     if (convex && leads.length) {
@@ -140,6 +186,9 @@ export async function POST(req: Request) {
         trialRemaining: null,
         cached,
         backend: ent.backend,
+        expandedFrom,
+        queriesUsed,
+        sellersDropped,
       }
     : (() => {
         const remaining = Math.max(0, ent.freeLimit - ent.leadsUsed);
@@ -153,6 +202,9 @@ export async function POST(req: Request) {
           freeLimit: ent.freeLimit,
           cached,
           backend: ent.backend,
+          expandedFrom,
+          queriesUsed,
+          sellersDropped,
         };
       })();
 

@@ -13,7 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Convex owns these — regenerated on every `convex dev`.
-    "convex/_generated/**",
+    "**/convex/_generated/**",
   ]),
 ]);
 

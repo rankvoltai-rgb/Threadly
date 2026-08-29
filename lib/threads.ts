@@ -141,8 +141,16 @@ export async function searchLeads(opts: {
     });
   }
 
-  // Most recent first is the headline promise; score breaks ties within a day.
-  leads.sort((a, b) => {
+  return rankLeads(leads);
+}
+
+/**
+ * Newest first is the headline promise, so posts are bucketed by day and score
+ * only breaks ties inside a bucket. Exported so the route can re-rank after
+ * Gemini replaces the regex scores.
+ */
+export function rankLeads(leads: Lead[]): Lead[] {
+  const sorted = [...leads].sort((a, b) => {
     const dayA = Math.floor(a.ageHours / 24);
     const dayB = Math.floor(b.ageHours / 24);
     if (dayA !== dayB) return dayA - dayB;
@@ -151,7 +159,7 @@ export async function searchLeads(opts: {
 
   // Drop verbatim reposts after ranking, so the copy that survives is the best one.
   const byText = new Set<string>();
-  return leads.filter((lead) => {
+  return sorted.filter((lead) => {
     const fp = fingerprint(lead.text);
     if (fp.length < 25) return true;
     if (byText.has(fp)) return false;
